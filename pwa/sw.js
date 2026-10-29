@@ -1,4 +1,4 @@
-const CACHE = 'flowy-shell-v3';
+const CACHE = 'flowy-shell-v4';
 const SHELL = ['./', './index.html', './app.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
