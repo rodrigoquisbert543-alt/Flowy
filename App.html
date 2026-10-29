@@ -671,7 +671,8 @@ async function guardarMovimiento() {
       cargarMovimientos();
       cargarResumen();
       if (document.getElementById('vista-dashboard').classList.contains('activa')) cargarDashboard();
-  } finally {
+          } else toast(r.msg, 'err');
+        } finally {
     loader(false);
   }
 }
