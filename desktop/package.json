@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "Café FLOWY - Pedidos y Ventas",
   "main": "main.js",
-  "author": "Café FLOWY",
+  "author": { "name": "Café FLOWY", "email": "rodrigoquisbert543-alt@users.noreply.github.com" },
+  "homepage": "https://github.com/rodrigoquisbert543-alt/Flowy",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win nsis",
-    "build:mac": "electron-builder --mac dmg",
-    "build:linux": "electron-builder --linux AppImage deb"
+    "build:win": "electron-builder --win nsis --publish never",
+    "build:mac": "electron-builder --mac dmg --publish never",
+    "build:linux": "electron-builder --linux AppImage deb --publish never"
   },
   "build": {
     "appId": "com.cafeflowy.app",
