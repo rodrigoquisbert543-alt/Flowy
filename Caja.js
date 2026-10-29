@@ -117,7 +117,7 @@ function _calcularResumenTurno(turnoId) {
 // Los ingresos por pedidos y los egresos por anulación se generan solos; no son movimientos manuales.
 function _esMovimientoManual(m) {
   const c = String(m.Concepto || '');
-  return !(c.startsWith('Pedido') || c.startsWith('Venta') || c.startsWith('Anulación'));
+  return !(/^Pedido P\d+/.test(c) || /^Anulación P\d+/.test(c));
 }
 
 function _resumenMovimientos(desde, hasta) {
