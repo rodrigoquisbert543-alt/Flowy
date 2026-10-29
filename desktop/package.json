@@ -1,10 +1,10 @@
 {
   "name": "cafe-flowy",
   "version": "1.0.0",
-  "description": "Café FLOWY - Pedidos y Ventas",
+  "description": "Flowy - Pedidos y Ventas",
   "main": "main.js",
   "author": {
-    "name": "Café FLOWY",
+    "name": "Flowy",
     "email": "rodrigoquisbert543-alt@users.noreply.github.com"
   },
   "homepage": "https://github.com/rodrigoquisbert543-alt/Flowy",
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.cafeflowy.app",
-    "productName": "Café FLOWY",
+    "productName": "Flowy",
     "files": [
       "main.js",
       "icon.png"
@@ -36,16 +36,16 @@
       "category": "Office"
     },
     "nsis": {
-      "artifactName": "CafeFlowy-Setup.${ext}"
+      "artifactName": "Flowy-Setup.${ext}"
     },
     "mac": {
-      "artifactName": "CafeFlowy.${ext}"
+      "artifactName": "Flowy.${ext}"
     },
     "appImage": {
-      "artifactName": "CafeFlowy.${ext}"
+      "artifactName": "Flowy.${ext}"
     },
     "deb": {
-      "artifactName": "CafeFlowy.${ext}"
+      "artifactName": "Flowy.${ext}"
     },
     "directories": {
       "output": "dist"

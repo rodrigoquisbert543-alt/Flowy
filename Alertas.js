@@ -68,6 +68,6 @@ function _enviarTelegram(mensaje) {
 }
 
 function probarTelegram(token) {
-  _enviarTelegram('🧪 <b>Test</b> del sistema Café FLOWY');
+  _enviarTelegram('🧪 <b>Test</b> del sistema Flowy');
   return { ok: true, msg: 'Enviado (revisa tu Telegram)' };
 }

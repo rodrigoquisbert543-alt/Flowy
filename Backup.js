@@ -8,7 +8,7 @@ function backupDiario() {
     
     let carpetaId = _getConfig().backup_carpeta_id;
     if (!carpetaId) {
-      const carpeta = DriveApp.createFolder('Backups Café FLOWY');
+      const carpeta = DriveApp.createFolder('Backups Flowy');
       carpetaId = carpeta.getId();
       
       const hoja = _hoja(HOJAS.CONFIG);

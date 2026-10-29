@@ -37,7 +37,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          name: Café FLOWY ${{ env.VERSION }}
+          name: Flowy ${{ env.VERSION }}
           files: |
             desktop/dist/*.exe
             desktop/dist/*.dmg

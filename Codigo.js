@@ -36,7 +36,7 @@ const MOLIENDAS = ['Fina (espresso)', 'Media (filtro/cafetera)', 'Gruesa (prensa
 function doGet(e) {
   const template = HtmlService.createTemplateFromFile('Index');
   return template.evaluate()
-    .setTitle('Café FLOWY - Pedidos')
+    .setTitle('Flowy - Pedidos')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -101,7 +101,7 @@ function inicializarSistema() {
   const cfg = SS.getSheetByName(HOJAS.CONFIG);
   if (cfg.getLastRow() === 1) {
     cfg.getRange(2,1,15,2).setValues([
-      ['negocio','Café FLOWY'],
+      ['negocio','Flowy'],
       ['direccion','Atención solo por pedidos (sin tienda)'],
       ['telefono','+591 70000000'],
       ['nit','0000000000'],

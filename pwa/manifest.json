@@ -1,6 +1,6 @@
 ﻿{
-  "name": "Café FLOWY - Pedidos",
-  "short_name": "Café FLOWY",
+  "name": "Flowy - Pedidos",
+  "short_name": "Flowy",
   "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,4 @@
-# Instalar Café FLOWY como aplicación
+# Instalar Flowy como aplicación
 
 ## 1. Publicar el backend
 En Apps Script: **Implementar > Nueva implementación > Aplicación web** (ejecutar como: yo, acceso: cualquiera). Copia la URL que termina en `/exec`.
