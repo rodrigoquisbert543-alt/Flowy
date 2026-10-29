@@ -159,6 +159,7 @@ function anularVenta(ticket, motivo, token) {
     ]);
     
     _invalidarProductos();
+    _invalidarCaja();
     _log('VENTA_ANULADA', `${ticket} - ${motivo}`);
     
     return { ok: true };

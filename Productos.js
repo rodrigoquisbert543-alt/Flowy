@@ -28,8 +28,7 @@ function obtenerProductos(soloDisponibles, token) {
 
 function _invalidarProductos() {
   CACHE.remove('productos_v3');
-  CACHE.remove('resumen_dia_v3');
-  CACHE.remove('top_productos_v3');
+  CACHE.remove('movimientos_ult_v3');
 }
 
 function guardarProducto(data, token) {

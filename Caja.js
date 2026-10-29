@@ -43,7 +43,7 @@ function cerrarTurno(montoFinal, contado, observaciones, token) {
     if (filaTurno < 0) return { ok: false, msg: 'Turno no encontrado' };
     
     const resumen = _calcularResumenTurno(turnoId);
-    const esperado = montoInicial + resumen.ventas - resumen.egresos;
+    const esperado = montoInicial + resumen.ventas + resumen.otrosIngresos - resumen.egresos;
     const contadoNum = _num(contado);
     const diferencia = contadoNum - esperado;
     
@@ -103,14 +103,38 @@ function _calcularResumenTurno(turnoId) {
   
   let otrosIngresos = 0, egresos = 0;
   movs.forEach(m => {
+    if (!_esMovimientoManual(m)) return;
     const monto = _num(m.Monto);
-    if (m.Tipo === 'Ingreso' && !String(m.Concepto).startsWith('Venta')) otrosIngresos += monto;
-    if (m.Tipo === 'Egreso' && !String(m.Concepto).startsWith('Anulación')) egresos += monto;
+    if (m.Tipo === 'Ingreso') otrosIngresos += monto;
+    if (m.Tipo === 'Egreso') egresos += monto;
   });
   
   return {
     ventas: total, efectivo, tarjeta, qr, otrosIngresos, egresos, tickets, anulados
   };
+}
+
+// Los ingresos por pedidos y los egresos por anulación se generan solos; no son movimientos manuales.
+function _esMovimientoManual(m) {
+  const c = String(m.Concepto || '');
+  return !(c.startsWith('Pedido') || c.startsWith('Venta') || c.startsWith('Anulación'));
+}
+
+function _resumenMovimientos(desde, hasta) {
+  const r = { ingresos: 0, egresos: 0, ingresosEfectivo: 0, egresosEfectivo: 0 };
+  _leerTabla(HOJAS.MOVIMIENTOS).forEach(m => {
+    const f = new Date(m.Fecha);
+    if (!(f >= desde && f < hasta) || !_esMovimientoManual(m)) return;
+    const monto = _num(m.Monto);
+    const efectivo = String(m.Método || 'Efectivo') === 'Efectivo';
+    if (m.Tipo === 'Ingreso') { r.ingresos += monto; if (efectivo) r.ingresosEfectivo += monto; }
+    if (m.Tipo === 'Egreso') { r.egresos += monto; if (efectivo) r.egresosEfectivo += monto; }
+  });
+  return r;
+}
+
+function _invalidarCaja() {
+  CACHE.remove('movimientos_ult_v3');
 }
 
 // ==================== MOVIMIENTOS ====================
@@ -126,8 +150,7 @@ function registrarMovimiento(tipo, concepto, monto, metodo, notas, token) {
     new Date(), tipo, concepto, m, metodo || 'Efectivo', notas || '', sesion.nombre, turnoId
   ]);
   
-  CACHE.remove('movimientos_ult_v3');
-  return { ok: true };
+  _invalidarCaja();
 }
 
 function obtenerMovimientos(limite, token) {
@@ -178,10 +201,10 @@ function realizarArqueo(fechaInicio, fechaFin, montoApertura, montoContado, nota
     let otrosIngresos = 0, egresos = 0;
     movs.forEach(m => {
       const f = new Date(m.Fecha);
-      if (f >= inicio && f <= fin) {
+      if (f >= inicio && f <= fin && _esMovimientoManual(m)) {
         const monto = _num(m.Monto);
-        if (m.Tipo === 'Ingreso' && !String(m.Concepto).startsWith('Venta')) otrosIngresos += monto;
-        if (m.Tipo === 'Egreso' && !String(m.Concepto).startsWith('Anulación')) egresos += monto;
+        if (m.Tipo === 'Ingreso') otrosIngresos += monto;
+        if (m.Tipo === 'Egreso') egresos += monto;
       }
     });
     

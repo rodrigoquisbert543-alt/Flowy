@@ -1,9 +1,5 @@
 // ==================== RESUMEN ====================
 function obtenerResumenDia(token) {
-  const cacheKey = 'resumen_dia_v3';
-  const cached = CACHE.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-  
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const manana = new Date(hoy); manana.setDate(manana.getDate()+1);
   
@@ -21,11 +17,17 @@ function obtenerResumenDia(token) {
     }
   });
   
+  const caja = _resumenMovimientos(hoy, manana);
   const res = {
     total, cantidad, efectivo, tarjeta, qr, anulados,
-    ticketPromedio: cantidad ? total/cantidad : 0
+    ticketPromedio: cantidad ? total/cantidad : 0,
+    otrosIngresos: caja.ingresos,
+    egresos: caja.egresos,
+    ingresosEfectivo: caja.ingresosEfectivo,
+    egresosEfectivo: caja.egresosEfectivo,
+    saldoCaja: total + caja.ingresos - caja.egresos,
+    saldoEfectivo: efectivo + caja.ingresosEfectivo - caja.egresosEfectivo
   };
-  CACHE.put(cacheKey, JSON.stringify(res), 30);
   return res;
 }
 
@@ -46,10 +48,6 @@ function obtenerVentasPorHora(token) {
 
 // ==================== TOP PRODUCTOS ====================
 function obtenerTopProductos(dias, token) {
-  const cacheKey = 'top_productos_v3';
-  const cached = CACHE.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-  
   const desde = new Date(); desde.setDate(desde.getDate() - (dias || 7));
   desde.setHours(0,0,0,0);
   
@@ -74,12 +72,12 @@ function obtenerTopProductos(dias, token) {
     .sort((a,b) => b.cantidad - a.cantidad)
     .slice(0, 10);
   
-  CACHE.put(cacheKey, JSON.stringify(lista), 120);
   return lista;
 }
 
 // ==================== VENTAS POR DÍA ====================
 function obtenerVentasUltimosDias(dias, token) {
+  const ventas = _leerTabla(HOJAS.VENTAS);
   const resultado = [];
   for (let i = dias - 1; i >= 0; i--) {
     const d = new Date();
@@ -88,7 +86,7 @@ function obtenerVentasUltimosDias(dias, token) {
     const dFin = new Date(d); dFin.setDate(dFin.getDate() + 1);
     
     let total = 0, tickets = 0;
-    _leerTabla(HOJAS.VENTAS).forEach(v => {
+    ventas.forEach(v => {
       const f = new Date(v.Fecha);
       if (f >= d && f < dFin && v.Estado !== 'Anulada') {
         total += _num(v.Total);

@@ -669,7 +669,8 @@ async function guardarMovimiento() {
       $('mov-monto').value = '';
       $('mov-notas').value = '';
       cargarMovimientos();
-    } else toast(r.msg, 'err');
+      cargarResumen();
+      if (document.getElementById('vista-dashboard').classList.contains('activa')) cargarDashboard();
   } finally {
     loader(false);
   }
@@ -895,6 +896,10 @@ async function cargarDashboard() {
   $('dash-tickets').textContent = res.cantidad;
   $('dash-efectivo').textContent = money(res.efectivo);
   $('dash-qr').textContent = money(res.tarjeta + res.qr);
+  $('dash-ingresos').textContent = money(res.otrosIngresos);
+  $('dash-egresos').textContent = money(res.egresos);
+  $('dash-saldo').textContent = money(res.saldoCaja);
+  $('dash-saldo-efectivo').textContent = money(res.saldoEfectivo);
   
   const dias = await gs('obtenerVentasUltimosDias', 7, STATE.token);
   renderChartSemana(dias);
