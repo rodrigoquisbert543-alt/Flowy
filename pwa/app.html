@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Café FLOWY - Pedidos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#6f4e37">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  html,body{margin:0;height:100%;background:#6f4e37;font-family:Arial,sans-serif}
+  iframe{border:0;width:100%;height:100%;display:block}
+  #off{display:none;color:#fff;text-align:center;padding:40px}
+</style>
+</head>
+<body>
+<iframe id="app" allow="clipboard-write; fullscreen"></iframe>
+<div id="off"><h2>Sin conexión</h2><p>Conéctate a internet para usar el sistema.</p></div>
+<script>
+  // URL de la implementación de Apps Script (Implementar > Aplicación web), termina en /exec
+  const APP_URL = 'https://script.google.com/macros/s/AKfycbwQBi2FUrxh84dZrOceWeSlkCEdE1ukQPYg6WBXAKmiL-yuJss3bJpmmXxoS_8NYmNCKw/exec';
+
+  const frame = document.getElementById('app');
+  const off = document.getElementById('off');
+  function load() {
+    if (!navigator.onLine) { frame.style.display = 'none'; off.style.display = 'block'; return; }
+    off.style.display = 'none'; frame.style.display = 'block';
+    if (!frame.src) frame.src = APP_URL;
+  }
+  addEventListener('online', load); addEventListener('offline', load); load();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

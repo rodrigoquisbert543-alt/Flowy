@@ -1,7 +1,7 @@
 {
   "name": "Café FLOWY - Pedidos",
   "short_name": "Café FLOWY",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#6f4e37",

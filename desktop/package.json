@@ -16,6 +16,10 @@
     "files": ["main.js", "icon.png"],
     "win": { "icon": "icon.png" },
     "linux": { "icon": "icon.png", "category": "Office" },
+    "nsis": { "artifactName": "CafeFlowy-Setup.${ext}" },
+    "mac": { "artifactName": "CafeFlowy.${ext}" },
+    "appImage": { "artifactName": "CafeFlowy.${ext}" },
+    "deb": { "artifactName": "CafeFlowy.${ext}" },
     "directories": { "output": "dist" }
   },
   "devDependencies": {

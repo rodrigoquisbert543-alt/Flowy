@@ -2,35 +2,62 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Café FLOWY - Pedidos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar Café FLOWY</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="theme-color" content="#6f4e37">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <style>
-  html,body{margin:0;height:100%;background:#6f4e37;font-family:Arial,sans-serif}
-  iframe{border:0;width:100%;height:100%;display:block}
-  #off{display:none;color:#fff;text-align:center;padding:40px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,sans-serif;background:#f5efe9;color:#3b2a1d;text-align:center;padding:24px}
+  img.logo{width:96px;height:96px;border-radius:22px;margin-top:16px}
+  h1{margin:12px 0 4px}
+  p.sub{margin:0 0 24px;color:#6f4e37}
+  .grid{display:grid;gap:12px;max-width:420px;margin:0 auto}
+  .btn{display:block;padding:16px;border-radius:12px;border:0;background:#6f4e37;color:#fff;font-size:17px;text-decoration:none;cursor:pointer;width:100%}
+  .btn.alt{background:#fff;color:#6f4e37;border:2px solid #6f4e37}
+  .btn small{display:block;font-size:12px;opacity:.85;margin-top:3px}
+  #ios{display:none;background:#fff;border-radius:12px;padding:14px;text-align:left;font-size:14px}
+  h3{margin:28px 0 8px}
 </style>
 </head>
 <body>
-<iframe id="app" allow="clipboard-write; fullscreen"></iframe>
-<div id="off"><h2>Sin conexión</h2><p>Conéctate a internet para usar el sistema.</p></div>
-<script>
-  // URL de la implementación de Apps Script (Implementar > Aplicación web), termina en /exec
-  const APP_URL = 'https://script.google.com/macros/s/AKfycbwQBi2FUrxh84dZrOceWeSlkCEdE1ukQPYg6WBXAKmiL-yuJss3bJpmmXxoS_8NYmNCKw/exec';
+<img class="logo" src="icons/icon-192.png" alt="Café FLOWY">
+<h1>Café FLOWY</h1>
+<p class="sub">Instala el sistema de pedidos en tu dispositivo</p>
 
-  const frame = document.getElementById('app');
-  const off = document.getElementById('off');
-  function load() {
-    if (!navigator.onLine) { frame.style.display = 'none'; off.style.display = 'block'; return; }
-    off.style.display = 'none'; frame.style.display = 'block';
-    if (!frame.src) frame.src = APP_URL;
-  }
-  addEventListener('online', load); addEventListener('offline', load); load();
+<div class="grid">
+  <button class="btn" id="install">📲 Instalar en este dispositivo<small>Celular, tablet o PC (Chrome / Edge)</small></button>
+  <div id="ios"><b>iPhone / iPad:</b> toca <b>Compartir</b> y luego <b>"Agregar a pantalla de inicio"</b>.</div>
+  <a class="btn alt" href="app.html">🌐 Abrir sin instalar</a>
+</div>
+
+<h3>Programa de escritorio</h3>
+<div class="grid">
+  <a class="btn" data-f="CafeFlowy-Setup.exe">🪟 Windows (.exe)</a>
+  <a class="btn" data-f="CafeFlowy.dmg">🍎 macOS (.dmg)</a>
+  <a class="btn" data-f="CafeFlowy.AppImage">🐧 Linux (AppImage)</a>
+  <a class="btn" data-f="CafeFlowy.deb">🐧 Linux (.deb)</a>
+</div>
+
+<script>
+  const REPO_URL = 'https://github.com/rodrigoquisbert543-alt/Flowy';
+  document.querySelectorAll('a[data-f]').forEach(a => a.href = REPO_URL + '/releases/latest/download/' + a.dataset.f);
+
+  let deferred;
+  const btn = document.getElementById('install');
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) location.replace('app.html');
+
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; });
+  addEventListener('appinstalled', () => { btn.textContent = '✅ Instalada'; });
+  btn.onclick = async () => {
+    if (deferred) { deferred.prompt(); await deferred.userChoice; deferred = null; }
+    else if (isIOS) document.getElementById('ios').style.display = 'block';
+    else alert('Usa el menú del navegador > "Instalar aplicación" (o "Agregar a pantalla de inicio").');
+  };
+  if (isIOS) document.getElementById('ios').style.display = 'block';
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 </body>
