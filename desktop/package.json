@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Café FLOWY - Pedidos y Ventas",
   "main": "main.js",
-  "author": { "name": "Café FLOWY", "email": "rodrigoquisbert543-alt@users.noreply.github.com" },
+  "author": {
+    "name": "Café FLOWY",
+    "email": "rodrigoquisbert543-alt@users.noreply.github.com"
+  },
   "homepage": "https://github.com/rodrigoquisbert543-alt/Flowy",
   "scripts": {
     "start": "electron .",
@@ -14,17 +17,45 @@
   "build": {
     "appId": "com.cafeflowy.app",
     "productName": "Café FLOWY",
-    "files": ["main.js", "icon.png"],
-    "win": { "icon": "icon.png" },
-    "linux": { "icon": "icon.png", "category": "Office" },
-    "nsis": { "artifactName": "CafeFlowy-Setup.${ext}" },
-    "mac": { "artifactName": "CafeFlowy.${ext}" },
-    "appImage": { "artifactName": "CafeFlowy.${ext}" },
-    "deb": { "artifactName": "CafeFlowy.${ext}" },
-    "directories": { "output": "dist" }
+    "files": [
+      "main.js",
+      "icon.png"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "rodrigoquisbert543-alt",
+        "repo": "Flowy"
+      }
+    ],
+    "win": {
+      "icon": "icon.png"
+    },
+    "linux": {
+      "icon": "icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "artifactName": "CafeFlowy-Setup.${ext}"
+    },
+    "mac": {
+      "artifactName": "CafeFlowy.${ext}"
+    },
+    "appImage": {
+      "artifactName": "CafeFlowy.${ext}"
+    },
+    "deb": {
+      "artifactName": "CafeFlowy.${ext}"
+    },
+    "directories": {
+      "output": "dist"
+    }
   },
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

@@ -9,5 +9,17 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  if (app.isPackaged) {
+    try {
+      const { autoUpdater } = require('electron-updater');
+      autoUpdater.autoDownload = true;
+      autoUpdater.autoInstallOnAppQuit = true;
+      autoUpdater.on('error', () => {});
+      autoUpdater.checkForUpdates().catch(() => {});
+      setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+    } catch (e) {}
+  }
+});
 app.on('window-all-closed', () => app.quit());

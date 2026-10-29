@@ -1,0 +1,27 @@
+name: Desplegar backend (Apps Script)
+on:
+  push:
+    branches: [main]
+    paths: ['*.js', '*.html', 'appsscript.json', '.claspignore']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLASPRC: ${{ secrets.CLASPRC_JSON }}
+      DEPLOYMENT_ID: ${{ secrets.CLASP_DEPLOYMENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Publicar en Apps Script
+        if: env.CLASPRC != ''
+        run: |
+          npm install -g @google/clasp
+          echo "$CLASPRC" > ~/.clasprc.json
+          clasp push -f
+          clasp deploy -i "$DEPLOYMENT_ID" -d "Auto ${{ github.sha }}"
+      - name: Secretos no configurados
+        if: env.CLASPRC == ''
+        run: echo "Falta el secreto CLASPRC_JSON; se omite el despliegue."
