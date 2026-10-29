@@ -2,11 +2,18 @@
 function obtenerResumenDia(token) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const manana = new Date(hoy); manana.setDate(manana.getDate()+1);
-  
+  return _resumenRango(hoy, manana);
+}
+
+function obtenerResumenTotal(token) {
+  return _resumenRango(new Date(0), new Date(8640000000000000));
+}
+
+function _resumenRango(desde, hasta) {
   let total = 0, cantidad = 0, efectivo = 0, tarjeta = 0, qr = 0, anulados = 0;
   _leerTabla(HOJAS.VENTAS).forEach(v => {
     const f = new Date(v.Fecha);
-    if (f >= hoy && f < manana) {
+    if (f >= desde && f < hasta) {
       if (v.Estado === 'Anulada') { anulados++; return; }
       const t = _num(v.Total);
       total += t; cantidad++;
@@ -17,7 +24,7 @@ function obtenerResumenDia(token) {
     }
   });
   
-  const caja = _resumenMovimientos(hoy, manana);
+  const caja = _resumenMovimientos(desde, hasta);
   const res = {
     total, cantidad, efectivo, tarjeta, qr, anulados,
     ticketPromedio: cantidad ? total/cantidad : 0,

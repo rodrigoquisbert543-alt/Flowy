@@ -897,10 +897,13 @@ async function cargarDashboard() {
   $('dash-tickets').textContent = res.cantidad;
   $('dash-efectivo').textContent = money(res.efectivo);
   $('dash-qr').textContent = money(res.tarjeta + res.qr);
-  $('dash-ingresos').textContent = money(res.otrosIngresos);
-  $('dash-egresos').textContent = money(res.egresos);
-  $('dash-saldo').textContent = money(res.saldoCaja);
-  $('dash-saldo-efectivo').textContent = money(res.saldoEfectivo);
+  const tot = await gs('obtenerResumenTotal', STATE.token);
+  $('tot-ventas').textContent = money(tot.total);
+  $('tot-tickets').textContent = tot.cantidad;
+  $('dash-ingresos').textContent = money(tot.otrosIngresos);
+  $('dash-egresos').textContent = money(tot.egresos);
+  $('dash-saldo').textContent = money(tot.saldoCaja);
+  $('dash-saldo-efectivo').textContent = money(tot.saldoEfectivo);
   
   const dias = await gs('obtenerVentasUltimosDias', 7, STATE.token);
   renderChartSemana(dias);
