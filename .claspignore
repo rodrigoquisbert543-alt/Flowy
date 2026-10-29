@@ -1,0 +1,7 @@
+**/*
+!appsscript.json
+!*.js
+!*.html
+desktop/**
+pwa/**
+node_modules/**
