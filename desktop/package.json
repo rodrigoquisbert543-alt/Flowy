@@ -1,0 +1,25 @@
+{
+  "name": "cafe-flowy",
+  "version": "1.0.0",
+  "description": "Café FLOWY - Pedidos y Ventas",
+  "main": "main.js",
+  "author": "Café FLOWY",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:mac": "electron-builder --mac dmg",
+    "build:linux": "electron-builder --linux AppImage deb"
+  },
+  "build": {
+    "appId": "com.cafeflowy.app",
+    "productName": "Café FLOWY",
+    "files": ["main.js", "icon.png"],
+    "win": { "icon": "icon.png" },
+    "linux": { "icon": "icon.png", "category": "Office" },
+    "directories": { "output": "dist" }
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

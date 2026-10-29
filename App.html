@@ -1,0 +1,1084 @@
+<script>
+// ═══════════════════════════════════════════════════
+// CAFÉ FLOWY — PEDIDOS DE CAFÉ MOLIDO v4.0 — APP CLIENTE
+// ═══════════════════════════════════════════════════
+
+const STATE = {
+  productos: [],
+  carrito: [],
+  config: {},
+  filtroCat: 'Todas',
+  busqueda: '',
+  tipoMov: 'Ingreso',
+  token: null,
+  usuario: null,
+  turnoActivo: null,
+  pin: '',
+  chartSemana: null,
+  opciones: { tiposEntrega: ['Domicilio'], estados: [], moliendas: [] },
+  entrega: { tipo: '', ciudad: '', direccion: '', cliente: '', telefono: '' }
+};
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ═══════════════ HELPERS ═══════════════
+const $ = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+
+function money(n) {
+  const m = STATE.config.moneda || 'Bs';
+  return m + ' ' + Number(n || 0).toFixed(2);
+}
+
+function toast(msg, tipo) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast visible ' + (tipo || '');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.className = 'toast ' + (tipo || ''), 2400);
+}
+
+function loader(show) {
+  $('loader').classList.toggle('visible', show);
+}
+
+function abrirModal(html) {
+  $('modal-contenido').innerHTML = html;
+  $('modal-overlay').classList.add('visible');
+}
+
+function cerrarModal() {
+  $('modal-overlay').classList.remove('visible');
+}
+
+$('modal-overlay').addEventListener('click', e => {
+  if (e.target.id === 'modal-overlay') cerrarModal();
+});
+
+// ═══════════════ WRAPPER google.script.run ═══════════════
+function gs(fnName, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(err => {
+        toast('Error: ' + (err.message || 'Conexión'), 'err');
+        reject(err);
+      })[fnName](...args);
+  });
+}
+
+// ═══════════════ LOGIN PIN ═══════════════
+function initLogin() {
+  const display = $('pin-display');
+  const btnLogin = $('btn-login');
+
+  function actualizarDisplay() {
+    display.querySelectorAll('span').forEach((s, i) => {
+      s.classList.toggle('activo', i < STATE.pin.length);
+    });
+    btnLogin.disabled = STATE.pin.length < 4;
+  }
+
+  $$('.pin-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (navigator.vibrate) navigator.vibrate(10);
+      
+      if (btn.dataset.num) {
+        if (STATE.pin.length < 8) {
+          STATE.pin += btn.dataset.num;
+          actualizarDisplay();
+        }
+      } else if (btn.dataset.fn === 'clear') {
+        STATE.pin = '';
+        actualizarDisplay();
+      } else if (btn.dataset.fn === 'del') {
+        STATE.pin = STATE.pin.slice(0, -1);
+        actualizarDisplay();
+      }
+    });
+  });
+
+  btnLogin.addEventListener('click', doLogin);
+
+  document.addEventListener('keydown', e => {
+    if (!$('pantalla-login') || $('pantalla-login').classList.contains('oculto')) return;
+    if (e.key >= '0' && e.key <= '9') {
+      if (STATE.pin.length < 8) {
+        STATE.pin += e.key;
+        actualizarDisplay();
+      }
+    } else if (e.key === 'Backspace') {
+      STATE.pin = STATE.pin.slice(0, -1);
+      actualizarDisplay();
+    } else if (e.key === 'Enter' && STATE.pin.length >= 4) {
+      doLogin();
+    }
+  });
+}
+
+async function doLogin() {
+  if (STATE.pin.length < 4) return;
+  loader(true);
+  try {
+    const r = await gs('loginPIN', STATE.pin);
+    if (r.ok) {
+      STATE.token = r.token;
+      STATE.usuario = r.usuario;
+      sessionStorage.setItem('token', r.token);
+      sessionStorage.setItem('usuario', JSON.stringify(r.usuario));
+      
+      const ini = (r.usuario.nombre || 'U').charAt(0).toUpperCase();
+      $('user-inicial').textContent = ini;
+      
+      await iniciarApp();
+    } else {
+      toast(r.msg || 'PIN incorrecto', 'err');
+      STATE.pin = '';
+      $('pin-display').querySelectorAll('span').forEach(s => s.classList.remove('activo'));
+      $('btn-login').disabled = true;
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    loader(false);
+  }
+}
+
+async function verificarSesion() {
+  const token = sessionStorage.getItem('token');
+  const usuario = sessionStorage.getItem('usuario');
+  if (token && usuario) {
+    STATE.token = token;
+    STATE.usuario = JSON.parse(usuario);
+    const ini = (STATE.usuario.nombre || 'U').charAt(0).toUpperCase();
+    $('user-inicial').textContent = ini;
+    return true;
+  }
+  return false;
+}
+
+// ═══════════════ NAVEGACIÓN ═══════════════
+function initNav() {
+  $$('.app-nav button').forEach(btn => {
+    btn.addEventListener('click', () => cambiarVista(btn.dataset.vista, btn));
+  });
+}
+
+function cambiarVista(nombre, btn) {
+  $$('.vista').forEach(v => v.classList.remove('activa'));
+  $('vista-' + nombre).classList.add('activa');
+  $$('.app-nav button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+
+  const titulos = {
+    ventas: 'Nuevo pedido',
+    caja: 'Caja y movimientos',
+    productos: 'Catálogo de presentaciones',
+    historial: 'Pedidos y entregas',
+    dashboard: 'Estadísticas'
+  };
+  $('subtitulo-texto').textContent = titulos[nombre] || '';
+
+  actualizarBarraCarrito();
+
+  if (nombre === 'caja') {
+    cargarMovimientos();
+    actualizarTurnoUI();
+  }
+  if (nombre === 'productos') renderListaProductos();
+  if (nombre === 'historial') cargarHistorial();
+  if (nombre === 'dashboard') cargarDashboard();
+  if (nombre === 'ventas') {
+    cargarResumen();
+    renderGridProductos();
+  }
+}
+
+// ═══════════════ PRODUCTOS ═══════════════
+async function cargarProductos() {
+  STATE.productos = await gs('obtenerProductos', false, STATE.token);
+  renderCategorias();
+  renderGridProductos();
+  renderListaProductos();
+  actualizarDatalistCats();
+}
+
+function renderCategorias() {
+  const cats = ['Todas', ...new Set(STATE.productos.map(p => p.categoria).filter(Boolean))];
+  $('cats').innerHTML = cats.map(c =>
+    `<div class="cat ${c === STATE.filtroCat ? 'active' : ''}" data-cat="${c}">${c}</div>`
+  ).join('');
+  
+  $$('#cats .cat').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.filtroCat = el.dataset.cat;
+      renderCategorias();
+      renderGridProductos();
+    });
+  });
+}
+
+function actualizarDatalistCats() {
+  const cats = [...new Set(STATE.productos.map(p => p.categoria).filter(Boolean))];
+  $('lista-cats').innerHTML = cats.map(c => `<option value="${c}">`).join('');
+}
+
+$('buscar-prod').addEventListener('input', e => {
+  STATE.busqueda = e.target.value.toLowerCase().trim();
+  renderGridProductos();
+});
+
+function renderGridProductos() {
+  const grid = $('grid-productos');
+  let lista = STATE.productos;
+  if (STATE.filtroCat !== 'Todas') lista = lista.filter(p => p.categoria === STATE.filtroCat);
+  if (STATE.busqueda) lista = lista.filter(p => p.nombre.toLowerCase().includes(STATE.busqueda));
+  
+  if (!lista.length) {
+    grid.innerHTML = '<div class="vacio" style="grid-column:1/-1;"><span class="ico">📦</span>No hay presentaciones</div>';
+    return;
+  }
+  
+  grid.innerHTML = lista.map(p => {
+    const enCarrito = STATE.carrito.find(c => c.id === p.id);
+    const stockBajo = p.stock > 0 && p.stock <= p.stockMin;
+    const clase = 'prod' + (!p.disponible ? ' agotado' : '') + (enCarrito ? ' seleccionado' : '');
+    return `
+      <div class="${clase}" data-id="${p.id}">
+        ${enCarrito ? `<div class="cantidad-tag">${enCarrito.cantidad}</div>` : ''}
+        <div>
+          <div class="nombre">${p.nombre}</div>
+          <div class="precio">${money(p.precio)}</div>
+        </div>
+        ${p.stock > 0 ? `<div class="stock-mini ${stockBajo ? 'bajo' : ''}">Stock: ${p.stock} bolsas${stockBajo ? ' ⚠️' : ''}</div>` : ''}
+        ${!p.disponible ? '<div class="badge">AGOTADO</div>' : ''}
+      </div>
+    `;
+  }).join('');
+  
+  grid.querySelectorAll('.prod').forEach(el => {
+    el.addEventListener('click', () => agregarAlCarrito(Number(el.dataset.id)));
+  });
+}
+
+function renderListaProductos() {
+  const cont = $('lista-productos');
+  $('cont-prods').textContent = `(${STATE.productos.length})`;
+  
+  if (!STATE.productos.length) {
+    cont.innerHTML = '<div class="vacio">Sin productos</div>';
+    return;
+  }
+  
+  cont.innerHTML = STATE.productos.map(p => `
+    <div class="item-lista">
+      <div style="flex:1;">
+        <b>${p.nombre}</b> <small style="color:#888;">${p.categoria}</small><br>
+        <small style="color:#888;">${money(p.precio)} · Stock: ${p.stock || '∞'} · ${p.disponible ? '✅' : '❌'}</small>
+      </div>
+      <div class="acciones">
+        <button data-accion="toggle" data-id="${p.id}" title="Disponible">${p.disponible ? '🚫' : '✅'}</button>
+        <button data-accion="edit" data-id="${p.id}" title="Editar">✏️</button>
+        <button data-accion="del" data-id="${p.id}" title="Eliminar">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+  
+  cont.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = Number(b.dataset.id);
+      if (b.dataset.accion === 'toggle') toggleProd(id);
+      if (b.dataset.accion === 'edit') editarProd(id);
+      if (b.dataset.accion === 'del') borrarProd(id);
+    });
+  });
+}
+
+async function guardarProducto() {
+  const data = {
+    id: $('prod-id').value ? Number($('prod-id').value) : null,
+    nombre: $('prod-nombre').value.trim(),
+    categoria: $('prod-categoria').value.trim() || 'General',
+    precio: parseFloat($('prod-precio').value),
+    costo: parseFloat($('prod-costo').value) || 0,
+    stock: parseInt($('prod-stock').value) || 0,
+    stockMin: parseInt($('prod-stockmin').value) || 5,
+    orden: parseInt($('prod-orden').value) || 999,
+    gramos: parseInt($('prod-gramos').value) || 0,
+    disponible: $('prod-disponible').value === 'true'
+  };
+  
+  if (!data.nombre) return toast('Nombre obligatorio', 'err');
+  if (isNaN(data.precio) || data.precio < 0) return toast('Precio inválido', 'err');
+  
+  loader(true);
+  try {
+    const r = await gs('guardarProducto', data, STATE.token);
+    if (r.ok) {
+      toast(r.msg, 'ok');
+      cancelarEdicionProd();
+      await cargarProductos();
+    } else toast(r.msg, 'err');
+  } finally {
+    loader(false);
+  }
+}
+
+function editarProd(id) {
+  const p = STATE.productos.find(x => x.id === id);
+  if (!p) return;
+  $('prod-id').value = p.id;
+  $('prod-nombre').value = p.nombre;
+  $('prod-categoria').value = p.categoria;
+  $('prod-gramos').value = p.gramos || '';
+  $('prod-precio').value = p.precio;
+  $('prod-costo').value = p.costo;
+  $('prod-stock').value = p.stock;
+  $('prod-stockmin').value = p.stockMin;
+  $('prod-orden').value = p.orden;
+  $('prod-disponible').value = p.disponible ? 'true' : 'false';
+  $('btn-guardar-prod').textContent = 'Actualizar producto';
+  $('btn-cancelar-prod').classList.remove('oculto');
+  $('titulo-form-prod').textContent = '✏️ Editar producto';
+  $('vista-productos').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelarEdicionProd() {
+  ['prod-id','prod-nombre','prod-categoria','prod-gramos','prod-precio','prod-costo'].forEach(id => {
+    const el = $(id);
+    if (el) el.value = '';
+  });
+  $('prod-stock').value = 0;
+  $('prod-stockmin').value = 5;
+  $('prod-orden').value = 999;
+  $('prod-disponible').value = 'true';
+  $('btn-guardar-prod').textContent = 'Guardar producto';
+  $('btn-cancelar-prod').classList.add('oculto');
+  $('titulo-form-prod').textContent = '➕ Agregar producto';
+}
+
+async function toggleProd(id) {
+  const r = await gs('toggleDisponible', id, STATE.token);
+  if (r.ok) {
+    await cargarProductos();
+    toast('Actualizado', 'ok');
+  }
+}
+
+async function borrarProd(id) {
+  if (!confirm('¿Eliminar este producto?')) return;
+  const r = await gs('eliminarProducto', id, STATE.token);
+  if (r.ok) {
+    await cargarProductos();
+    toast('Eliminado', 'ok');
+  }
+}
+
+// ═══════════════ CARRITO ═══════════════
+function agregarAlCarrito(id) {
+  const p = STATE.productos.find(x => x.id === id);
+  if (!p) return;
+  if (!p.disponible) return toast('Producto agotado', 'err');
+  
+  const ex = STATE.carrito.find(c => c.id === id);
+  if (ex) {
+    if (p.stock > 0 && ex.cantidad >= p.stock) return toast('Stock insuficiente', 'err');
+    ex.cantidad++;
+  } else {
+    STATE.carrito.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, gramos: p.gramos, molienda: (STATE.opciones.moliendas || [])[1] || '' });
+  }
+  
+  if (navigator.vibrate) navigator.vibrate(15);
+  renderGridProductos();
+  actualizarBarraCarrito();
+}
+
+function actualizarBarraCarrito() {
+  const total = STATE.carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+  const cant = STATE.carrito.reduce((s, i) => s + i.cantidad, 0);
+  $('carrito-count').textContent = cant;
+  $('carrito-total').textContent = money(total);
+  
+  const vistaActiva = document.querySelector('.vista.activa');
+  $('carrito-bar').classList.toggle('visible', 
+    STATE.carrito.length > 0 && vistaActiva && vistaActiva.id === 'vista-ventas'
+  );
+}
+
+function guardarEntregaForm() {
+  const g = id => ($(id) ? $(id).value : null);
+  const e = STATE.entrega;
+  if (g('inp-tipo-entrega') !== null) e.tipo = g('inp-tipo-entrega');
+  if (g('inp-ciudad') !== null) e.ciudad = g('inp-ciudad').trim();
+  if (g('inp-direccion') !== null) e.direccion = g('inp-direccion').trim();
+  if (g('inp-cliente') !== null) e.cliente = g('inp-cliente').trim();
+  if (g('inp-telefono') !== null) e.telefono = g('inp-telefono').trim();
+}
+
+function cambiarMolienda(idx, valor) {
+  STATE.carrito[idx].molienda = valor;
+}
+
+function abrirCarrito() {
+  if (!STATE.carrito.length) return;
+  guardarEntregaForm();
+  const e = STATE.entrega;
+  const tipos = STATE.opciones.tiposEntrega || [];
+  const tipoSel = e.tipo || tipos[0] || '';
+  const subtotal = STATE.carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+  const peso = STATE.carrito.reduce((s, i) => s + (i.gramos || 0) * i.cantidad, 0);
+  
+  let html = '<h3>🛒 Pedido</h3>';
+  STATE.carrito.forEach((item, idx) => {
+    html += `
+      <div class="item-lista" style="flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+          <div style="flex:1;">
+            <b>${esc(item.nombre)}</b><br>
+            <small style="color:#888;">${money(item.precio)} c/u</small>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button data-idx="${idx}" data-delta="-1" style="width:34px;height:34px;border-radius:8px;border:none;background:#f0f0f0;font-size:18px;cursor:pointer;">−</button>
+            <b style="min-width:24px;text-align:center;">${item.cantidad}</b>
+            <button data-idx="${idx}" data-delta="1" style="width:34px;height:34px;border-radius:8px;border:none;background:#f0f0f0;font-size:18px;cursor:pointer;">+</button>
+            <b style="min-width:70px;text-align:right;">${money(item.precio * item.cantidad)}</b>
+          </div>
+        </div>
+        <select data-molienda="${idx}" style="margin-top:6px;">
+          ${(STATE.opciones.moliendas || []).map(m => `<option ${m === item.molienda ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  });
+  
+  html += `
+    <div style="margin-top:14px;">
+      <label>📦 Tipo de entrega</label>
+      <select id="inp-tipo-entrega">
+        ${tipos.map(t => `<option ${t === tipoSel ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+      </select>
+      <div class="fila-2">
+        <div>
+          <label>👤 Cliente</label>
+          <input id="inp-cliente" type="text" placeholder="Nombre" value="${esc(e.cliente)}">
+        </div>
+        <div>
+          <label>📱 Teléfono</label>
+          <input id="inp-telefono" type="tel" placeholder="Celular / WhatsApp" value="${esc(e.telefono)}">
+        </div>
+      </div>
+      <label>🏙️ Ciudad</label>
+      <input id="inp-ciudad" type="text" placeholder="${esc(STATE.config.ciudad_base || 'Ciudad')}" value="${esc(e.ciudad)}">
+      <label id="lbl-direccion">📍 Dirección / punto de entrega</label>
+      <input id="inp-direccion" type="text" placeholder="Calle, número, referencia o punto de encuentro" value="${esc(e.direccion)}">
+      <div class="fila-2">
+        <div>
+          <label>🚚 Costo de envío (Bs)</label>
+          <input id="inp-delivery" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="0">
+        </div>
+        <div>
+          <label>➕ Extras (Bs)</label>
+          <input id="inp-extras" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="0">
+        </div>
+      </div>
+      <label>🏷️ Descuento (Bs)</label>
+      <input id="inp-descuento" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="0">
+      <label>Notas</label>
+      <input id="inp-notas-extra" type="text" placeholder="Ej: Entregar en la tarde">
+      <label>Método de pago</label>
+      <select id="inp-pago">
+        <option>Efectivo</option>
+        <option>Transferencia</option>
+        <option>QR</option>
+        <option>Tarjeta</option>
+      </select>
+    </div>
+    <div class="totales">
+      <div class="fila"><span>Peso total</span><span>${peso >= 1000 ? (peso / 1000).toFixed(2) + ' kg' : peso + ' gr'}</span></div>
+      <div class="fila"><span>Subtotal</span><span id="subtotal-carrito">${money(subtotal)}</span></div>
+      <div class="fila"><span>Envío</span><span id="del-carrito">${money(0)}</span></div>
+      <div class="fila"><span>Extras</span><span id="ext-carrito">${money(0)}</span></div>
+      <div class="fila"><span>Descuento</span><span id="desc-carrito">-${money(0)}</span></div>
+      <div class="fila total"><span>TOTAL</span><span id="tot-carrito">${money(subtotal)}</span></div>
+    </div>
+    <button class="btn btn-success" style="margin-top:14px;" onclick="confirmarVenta()">✅ Registrar pedido ${money(subtotal)}</button>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="vaciarCarrito()">🗑️ Vaciar</button>
+  `;
+  
+  abrirModal(html);
+  
+  setTimeout(() => {
+    STATE.carrito.forEach((_, idx) => {
+      document.querySelectorAll(`[data-idx="${idx}"]`).forEach(b => {
+        b.addEventListener('click', () => cambiarCantidad(idx, Number(b.dataset.delta)));
+      });
+      const sel = document.querySelector(`[data-molienda="${idx}"]`);
+      if (sel) sel.addEventListener('change', () => cambiarMolienda(idx, sel.value));
+    });
+    ['inp-delivery','inp-extras','inp-descuento'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('input', recalcularCarrito);
+    });
+  }, 50);
+}
+
+function recalcularCarrito() {
+  const subtotal = STATE.carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+  const del = parseFloat($('inp-delivery')?.value) || 0;
+  const ext = parseFloat($('inp-extras')?.value) || 0;
+  const desc = parseFloat($('inp-descuento')?.value) || 0;
+  const total = Math.max(0, subtotal + del + ext - desc);
+  $('del-carrito').textContent = money(del);
+  $('ext-carrito').textContent = money(ext);
+  $('desc-carrito').textContent = '-' + money(desc);
+  $('tot-carrito').textContent = money(total);
+  const btn = document.querySelector('.btn-success');
+  if (btn) btn.textContent = '✅ Registrar pedido ' + money(total);
+}
+
+function cambiarCantidad(idx, delta) {
+  STATE.carrito[idx].cantidad += delta;
+  if (STATE.carrito[idx].cantidad <= 0) STATE.carrito.splice(idx, 1);
+  if (!STATE.carrito.length) cerrarModal();
+  else abrirCarrito();
+  renderGridProductos();
+  actualizarBarraCarrito();
+}
+
+function vaciarCarrito() {
+  if (!confirm('¿Vaciar el carrito?')) return;
+  STATE.carrito = [];
+  cerrarModal();
+  renderGridProductos();
+  actualizarBarraCarrito();
+}
+
+async function confirmarVenta() {
+  if (!STATE.carrito.length) return toast('El pedido está vacío', 'err');
+  guardarEntregaForm();
+  const e = STATE.entrega;
+  if (!e.cliente) return toast('Ingresa el nombre del cliente', 'err');
+  if (!e.telefono) return toast('Ingresa el teléfono del cliente', 'err');
+  if (e.tipo === 'Envío a otra ciudad' && !e.ciudad) return toast('Indica la ciudad de destino', 'err');
+  if (!e.direccion) return toast('Indica la dirección o punto de entrega', 'err');
+  
+  const payload = {
+    items: STATE.carrito,
+    delivery: parseFloat($('inp-delivery').value) || 0,
+    extras: parseFloat($('inp-extras').value) || 0,
+    descuento: parseFloat($('inp-descuento').value) || 0,
+    notasExtra: $('inp-notas-extra').value.trim(),
+    metodoPago: $('inp-pago').value,
+    cliente: e.cliente,
+    telefonoCliente: e.telefono,
+    tipoEntrega: e.tipo || (STATE.opciones.tiposEntrega || [])[0],
+    ciudad: e.ciudad,
+    direccion: e.direccion
+  };
+  
+  loader(true);
+  try {
+    const r = await gs('registrarVenta', payload, STATE.token);
+    if (r.ok) {
+      STATE.carrito = [];
+      STATE.entrega = { tipo: '', ciudad: '', direccion: '', cliente: '', telefono: '' };
+      cerrarModal();
+      await cargarProductos();
+      actualizarBarraCarrito();
+      cargarResumen();
+      mostrarTicket(r);
+    } else toast(r.msg || 'Error', 'err');
+  } finally {
+    loader(false);
+  }
+}
+
+function mostrarTicket(venta) {
+  const cfg = STATE.config;
+  const lineas = venta.items.map(i => 
+    `<div class="fila"><span>${i.cantidad}x ${esc(i.nombre)}</span><span>${money(i.precio * i.cantidad)}</span></div>` +
+    (i.molienda ? `<div class="fila"><small>&nbsp;&nbsp;Molienda: ${esc(i.molienda)}</small></div>` : '')
+  ).join('');
+  
+  const html = `
+    <div class="ticket">
+      <div class="centro">
+        <b style="font-size:15px;">${esc(cfg.negocio || 'CAFÉ FLOWY')}</b><br>
+        <small>${esc(cfg.direccion || '')}</small><br>
+        <small>${esc(cfg.telefono || '')}</small>
+      </div>
+      <div class="linea"></div>
+      <div class="fila"><span>Pedido:</span><span>${venta.ticket}</span></div>
+      <div class="fila"><span>Fecha:</span><span>${venta.fecha}</span></div>
+      <div class="fila"><span>Atendió:</span><span>${esc(venta.usuario)}</span></div>
+      <div class="fila"><span>Cliente:</span><span>${esc(venta.cliente)}</span></div>
+      <div class="fila"><span>Teléfono:</span><span>${esc(venta.telefono)}</span></div>
+      <div class="linea"></div>
+      <div class="fila"><span>Entrega:</span><span>${esc(venta.tipoEntrega)}</span></div>
+      <div class="fila"><span>Ciudad:</span><span>${esc(venta.ciudad)}</span></div>
+      <div class="fila"><span>Dirección:</span><span>${esc(venta.direccion)}</span></div>
+      ${venta.notasExtra ? `<div class="fila"><span>Notas:</span><span>${esc(venta.notasExtra)}</span></div>` : ''}
+      <div class="linea"></div>
+      ${lineas}
+      <div class="fila"><span>Peso total</span><span>${venta.pesoGr >= 1000 ? (venta.pesoGr / 1000).toFixed(2) + ' kg' : venta.pesoGr + ' gr'}</span></div>
+      <div class="linea"></div>
+      <div class="fila"><span>Subtotal</span><span>${money(venta.subtotal)}</span></div>
+      ${venta.delivery > 0 ? `<div class="fila"><span>Envío</span><span>${money(venta.delivery)}</span></div>` : ''}
+      ${venta.extras > 0 ? `<div class="fila"><span>Extras</span><span>${money(venta.extras)}</span></div>` : ''}
+      ${venta.descuento > 0 ? `<div class="fila"><span>Descuento</span><span>-${money(venta.descuento)}</span></div>` : ''}
+      <div class="linea"></div>
+      <div class="fila total-final"><span>TOTAL</span><span>${money(venta.total)}</span></div>
+      <div class="linea"></div>
+      ${venta.puntos ? `<div class="centro"><small>⭐ Ganaste ${venta.puntos} puntos</small></div><div class="linea"></div>` : ''}
+      <div class="centro">
+        <small>Pago: ${venta.metodoPago}</small><br>
+        <small style="margin-top:6px;display:block;">${cfg.mensaje_ticket || '¡Gracias por su compra!'}</small>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:14px;" onclick="window.print()">🖨️ Imprimir</button>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="cerrarModal()">Cerrar</button>
+  `;
+  abrirModal(html);
+}
+
+// ═══════════════ CAJA / TURNOS ═══════════════
+function setTipoMov(tipo) {
+  STATE.tipoMov = tipo;
+  $('mov-tipo').value = tipo;
+  $('btn-tipo-ing').classList.toggle('activo', tipo === 'Ingreso');
+  $('btn-tipo-egr').classList.toggle('activo', tipo === 'Egreso');
+}
+
+async function guardarMovimiento() {
+  const tipo = $('mov-tipo').value;
+  const concepto = $('mov-concepto').value.trim();
+  const monto = parseFloat($('mov-monto').value);
+  const metodo = $('mov-metodo').value;
+  const notas = $('mov-notas').value.trim();
+  
+  if (!concepto) return toast('Ingresa concepto', 'err');
+  if (isNaN(monto) || monto <= 0) return toast('Monto inválido', 'err');
+  
+  loader(true);
+  try {
+    const r = await gs('registrarMovimiento', tipo, concepto, monto, metodo, notas, STATE.token);
+    if (r.ok) {
+      toast('Guardado', 'ok');
+      $('mov-concepto').value = '';
+      $('mov-monto').value = '';
+      $('mov-notas').value = '';
+      cargarMovimientos();
+    } else toast(r.msg, 'err');
+  } finally {
+    loader(false);
+  }
+}
+
+async function cargarMovimientos() {
+  const lista = await gs('obtenerMovimientos', 50, STATE.token);
+  const cont = $('lista-movimientos');
+  if (!lista.length) {
+    cont.innerHTML = '<div class="vacio">Sin movimientos</div>';
+    return;
+  }
+  cont.innerHTML = lista.map(m => `
+    <div class="item-lista">
+      <div style="flex:1;">
+        <b style="color:${m.tipo === 'Ingreso' ? 'var(--success)' : 'var(--danger)'};">
+          ${m.tipo === 'Ingreso' ? '↑' : '↓'} ${m.tipo}
+        </b>
+        <br><small style="color:#888;">${m.fecha} · ${m.concepto}</small>
+      </div>
+      <b style="color:${m.tipo === 'Ingreso' ? 'var(--success)' : 'var(--danger)'};">${money(m.monto)}</b>
+    </div>
+  `).join('');
+}
+
+async function actualizarTurnoUI() {
+  const turnoId = await gs('obtenerTurnoActivo', STATE.token);
+  const info = $('turno-info');
+  const btnAbrir = $('btn-abrir-turno');
+  const btnCerrar = $('btn-cerrar-turno');
+  
+  if (turnoId) {
+    STATE.turnoActivo = turnoId;
+    info.innerHTML = `<p style="color:var(--success);font-weight:600;">✅ Turno abierto: ${turnoId}</p>`;
+    btnAbrir.classList.add('oculto');
+    btnCerrar.classList.remove('oculto');
+  } else {
+    STATE.turnoActivo = null;
+    info.innerHTML = `<p style="color:var(--text-muted);">No hay turno abierto</p>`;
+    btnAbrir.classList.remove('oculto');
+    btnCerrar.classList.add('oculto');
+  }
+}
+
+function abrirTurnoUI() {
+  const html = `
+    <h3>🟢 Abrir turno</h3>
+    <label>Monto inicial en caja (Bs)</label>
+    <input id="turno-monto-inicial" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="0">
+    <button class="btn btn-success" onclick="confirmarAbrirTurno()">Abrir turno</button>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="cerrarModal()">Cancelar</button>
+  `;
+  abrirModal(html);
+}
+
+async function confirmarAbrirTurno() {
+  const monto = parseFloat($('turno-monto-inicial').value) || 0;
+  loader(true);
+  try {
+    const r = await gs('abrirTurno', monto, STATE.token);
+    if (r.ok) {
+      toast('Turno abierto', 'ok');
+      cerrarModal();
+      actualizarTurnoUI();
+    } else toast(r.msg, 'err');
+  } finally {
+    loader(false);
+  }
+}
+
+function cerrarTurnoUI() {
+  const html = `
+    <h3>🔴 Cerrar turno</h3>
+    <label>Monto contado (Bs)</label>
+    <input id="turno-monto-contado" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="0">
+    <label>Observaciones</label>
+    <input id="turno-observaciones" type="text" placeholder="Opcional">
+    <button class="btn btn-danger" onclick="confirmarCerrarTurno()">Cerrar turno</button>
+    <button class="btn btn-secondary" style="margin-top:8px;" onclick="cerrarModal()">Cancelar</button>
+  `;
+  abrirModal(html);
+}
+
+async function confirmarCerrarTurno() {
+  const contado = parseFloat($('turno-monto-contado').value) || 0;
+  const obs = $('turno-observaciones').value.trim();
+  
+  loader(true);
+  try {
+    const r = await gs('cerrarTurno', 0, contado, obs, STATE.token);
+    if (r.ok) {
+      cerrarModal();
+      mostrarResumenTurno(r);
+    } else toast(r.msg, 'err');
+  } finally {
+    loader(false);
+  }
+}
+
+function mostrarResumenTurno(r) {
+  const difColor = r.diferencia === 0 ? 'var(--success)' : (r.diferencia > 0 ? '#0071e3' : 'var(--danger)');
+  const html = `
+    <h3>📊 Cierre de turno</h3>
+    <p style="color:#888;font-size:13px;margin-bottom:10px;">${r.usuario} · ${r.tickets} tickets</p>
+    <div style="background:#f9f9f9;padding:14px;border-radius:10px;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Apertura</span><b>${money(r.montoInicial)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Ventas</span><b>${money(r.ventas)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;padding-left:20px;font-size:13px;color:#666;"><span>· Efectivo</span><b>${money(r.efectivo)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;padding-left:20px;font-size:13px;color:#666;"><span>· Tarjeta</span><b>${money(r.tarjeta)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;padding-left:20px;font-size:13px;color:#666;"><span>· QR</span><b>${money(r.qr)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Egresos</span><b style="color:var(--danger);">-${money(r.egresos)}</b></div>
+      <hr style="margin:8px 0;border:none;border-top:1px dashed #ccc;">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:16px;"><span>Esperado</span><b>${money(r.esperado)}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:16px;"><span>Contado</span><b>${money(r.contado)}</b></div>
+      <hr style="margin:8px 0;border:none;border-top:1px solid #333;">
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:19px;">
+        <span>Diferencia</span><b style="color:${difColor};">${money(r.diferencia)}</b>
+      </div>
+    </div>
+    <p style="margin-top:12px;font-size:13px;color:#666;text-align:center;">
+      ${r.diferencia === 0 ? '✅ La caja cuadra' : r.diferencia > 0 ? '⚠️ Sobrante' : '⚠️ Faltante'}
+    </p>
+    <button class="btn btn-secondary" style="margin-top:14px;" onclick="cerrarModal();actualizarTurnoUI()">Cerrar</button>
+  `;
+  abrirModal(html);
+}
+
+async function hacerArqueo() {
+  const inicio = $('arq-inicio').value;
+  const fin = $('arq-fin').value;
+  const apertura = parseFloat($('arq-apertura').value) || 0;
+  const contado = parseFloat($('arq-contado').value) || 0;
+  
+  if (!inicio || !fin) return toast('Selecciona fechas', 'err');
+  
+  loader(true);
+  try {
+    const r = await gs('realizarArqueo', inicio, fin, apertura, contado, '', STATE.token);
+    if (!r.ok) return toast('Error', 'err');
+    
+    const difColor = r.diferencia === 0 ? 'var(--success)' : (r.diferencia > 0 ? '#0071e3' : 'var(--danger)');
+    const html = `
+      <h3>📊 Resultado del arqueo</h3>
+      <p style="color:#888;font-size:13px;margin-bottom:10px;">${r.fechaInicio} → ${r.fechaFin} · ${r.numTickets} tickets</p>
+      <div style="background:#f9f9f9;padding:14px;border-radius:10px;font-size:14px;">
+        <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Apertura</span><b>${money(r.montoApertura)}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Ventas</span><b>${money(r.totalVentas)}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Otros ingresos</span><b>${money(r.otrosIngresos)}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Egresos</span><b style="color:var(--danger);">-${money(r.egresos)}</b></div>
+        <hr style="margin:8px 0;border:none;border-top:1px dashed #ccc;">
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:16px;"><span>Esperado</span><b>${money(r.saldoEsperado)}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:16px;"><span>Contado</span><b>${money(r.montoContado)}</b></div>
+        <hr style="margin:8px 0;border:none;border-top:1px solid #333;">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:19px;">
+          <span>Diferencia</span><b style="color:${difColor};">${money(r.diferencia)}</b>
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:14px;" onclick="cerrarModal()">Cerrar</button>
+    `;
+    abrirModal(html);
+  } finally {
+    loader(false);
+  }
+}
+
+// ═══════════════ HISTORIAL ═══════════════
+async function cargarHistorial() {
+  const filtro = $('filtro-pedidos') ? $('filtro-pedidos').value : 'Activos';
+  const lista = await gs('obtenerPedidos', filtro, STATE.token);
+  const cont = $('historial-ventas');
+  if (!lista.length) {
+    cont.innerHTML = '<div class="vacio"><span class="ico">📦</span>Sin pedidos</div>';
+    return;
+  }
+  const estados = (STATE.opciones.estados || []).filter(e => e !== 'Cancelado');
+  cont.innerHTML = lista.map(p => `
+    <div class="item-lista" style="flex-direction:column;align-items:flex-start;gap:4px;">
+      <div style="display:flex;justify-content:space-between;width:100%;">
+        <b>${esc(p.ticket)} · ${esc(p.fecha)}</b>
+        <b style="color:var(--primary);">${money(p.total)}</b>
+      </div>
+      <div><b>${esc(p.cliente)}</b> · <a href="tel:${esc(p.telefono)}">${esc(p.telefono)}</a></div>
+      <small style="color:#888;">${esc(p.tipoEntrega)} · ${esc(p.ciudad)} · ${esc(p.direccion)}</small>
+      <small style="color:#888;">${p.items.map(i => `${i.cantidad}x ${esc(i.nombre)}${i.molienda ? ' (' + esc(i.molienda) + ')' : ''}`).join('<br>')}</small>
+      <small style="color:#888;">Pago: ${esc(p.metodoPago)} · ${p.pesoGr} gr${p.guia ? ' · Guía: ' + esc(p.guia) : ''}</small>
+      ${p.notas ? `<small style="color:#888;">📝 ${esc(p.notas)}</small>` : ''}
+      ${p.estado === 'Anulada'
+        ? '<small style="color:var(--danger);font-weight:600;">❌ ANULADO</small>'
+        : `<select data-ticket="${esc(p.ticket)}" data-guia="${esc(p.guia)}" data-estado="${esc(p.estadoPedido)}" style="width:100%;">
+            ${estados.map(e => `<option ${e === p.estadoPedido ? 'selected' : ''}>${e}</option>`).join('')}
+          </select>`}
+    </div>
+  `).join('');
+  
+  cont.querySelectorAll('select[data-ticket]').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoPedido(sel));
+  });
+}
+
+async function cambiarEstadoPedido(sel) {
+  const nuevo = sel.value;
+  let guia = '';
+  if (nuevo === 'Enviado') {
+    const entrada = prompt('Número de guía / transportadora (opcional):', sel.dataset.guia || '');
+    if (entrada === null) { sel.value = sel.dataset.estado; return; }
+    guia = entrada;
+  }
+  loader(true);
+  try {
+    const r = await gs('actualizarEstadoPedido', sel.dataset.ticket, nuevo, guia, STATE.token);
+    if (r.ok) toast('Pedido ' + nuevo.toLowerCase(), 'ok');
+    else toast(r.msg || 'Error', 'err');
+  } finally {
+    loader(false);
+  }
+  cargarHistorial();
+}
+
+// ═══════════════ DASHBOARD ═══════════════
+async function cargarDashboard() {
+  const res = await gs('obtenerResumenDia', STATE.token);
+  $('dash-total').textContent = money(res.total);
+  $('dash-tickets').textContent = res.cantidad;
+  $('dash-efectivo').textContent = money(res.efectivo);
+  $('dash-qr').textContent = money(res.tarjeta + res.qr);
+  
+  const dias = await gs('obtenerVentasUltimosDias', 7, STATE.token);
+  renderChartSemana(dias);
+  
+  const top = await gs('obtenerTopProductos', 7, STATE.token);
+  const contTop = $('top-productos');
+  if (!top.length) {
+    contTop.innerHTML = '<div class="vacio">Sin datos</div>';
+  } else {
+    contTop.innerHTML = top.map((p, i) => `
+      <div class="item-lista">
+        <div style="flex:1;">
+          <b>${i + 1}. ${p.nombre}</b><br>
+          <small style="color:#888;">${p.cantidad} unidades</small>
+        </div>
+        <b style="color:var(--primary);">${money(p.total)}</b>
+      </div>
+    `).join('');
+  }
+}
+
+function renderChartSemana(dias) {
+  const canvas = $('chart-semana');
+  if (!canvas) return;
+  
+  // Gráfico simple con canvas nativo (sin Chart.js)
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * 2;
+  const H = canvas.height = 180 * 2;
+  ctx.scale(1, 1);
+  
+  const pad = 40;
+  const chartW = W - pad * 2;
+  const chartH = H - pad * 2;
+  const max = Math.max(...dias.map(d => d.total), 1);
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  // Grid
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 2;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+  }
+  
+  // Barras
+  const barW = chartW / dias.length * 0.6;
+  const gap = chartW / dias.length;
+  
+  dias.forEach((d, i) => {
+    const x = pad + gap * i + (gap - barW) / 2;
+    const h = (d.total / max) * chartH;
+    const y = pad + chartH - h;
+    
+    // Barra
+    const grad = ctx.createLinearGradient(0, y, 0, pad + chartH);
+    grad.addColorStop(0, '#8b6f47');
+    grad.addColorStop(1, '#6f4e37');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, h, 8);
+    ctx.fill();
+    
+    // Fecha
+    ctx.fillStyle = '#666';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.fecha, x + barW / 2, H - 12);
+    
+    // Valor
+    if (d.total > 0) {
+      ctx.fillStyle = '#3e2723';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('Bs' + Math.round(d.total), x + barW / 2, y - 8);
+    }
+  });
+}
+
+// ═══════════════ RESUMEN ═══════════════
+async function cargarResumen() {
+  const r = await gs('obtenerResumenDia', STATE.token);
+  $('stat-total').textContent = money(r.total);
+  $('stat-cant').textContent = r.cantidad;
+  $('stat-prom').textContent = money(r.ticketPromedio);
+}
+
+// ═══════════════ CONEXIÓN ═══════════════
+function actualizarConexion() {
+  const dot = $('online-dot');
+  if (dot) dot.classList.toggle('off', !navigator.onLine);
+}
+
+window.addEventListener('online', actualizarConexion);
+window.addEventListener('offline', actualizarConexion);
+
+// ═══════════════ LOGOUT ═══════════════
+async function hacerLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  await gs('logout', STATE.token);
+  sessionStorage.clear();
+  location.reload();
+}
+
+// ═══════════════ INICIO ═══════════════
+async function iniciarApp() {
+  $('pantalla-login').classList.add('oculto');
+  $('app').classList.remove('oculto');
+  
+  loader(true);
+  try {
+    STATE.config = await gs('obtenerConfig');
+    STATE.opciones = await gs('obtenerOpcionesPedido');
+    $('nombre-negocio').textContent = STATE.config.negocio || 'Café FLOWY';
+    document.title = (STATE.config.negocio || 'Café FLOWY') + ' - Pedidos';
+    
+    await cargarProductos();
+    await cargarResumen();
+    await actualizarTurnoUI();
+    
+    const hoy = new Date().toISOString().split('T')[0];
+    $('arq-inicio').value = hoy;
+    $('arq-fin').value = hoy;
+    setTipoMov('Ingreso');
+    actualizarConexion();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    loader(false);
+  }
+}
+
+// Listener para botón de usuario
+document.addEventListener('DOMContentLoaded', () => {
+  initLogin();
+  initNav();
+  
+  const btnUsuario = $('btn-usuario');
+  if (btnUsuario) {
+    btnUsuario.addEventListener('click', () => {
+      const u = STATE.usuario || {};
+      const html = `
+        <h3>👤 ${u.nombre || 'Usuario'}</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:14px;">
+          ${u.email || ''}<br>
+          Rol: <b>${u.rol || ''}</b>
+        </p>
+        <button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>
+        <button class="btn btn-danger" style="margin-top:8px;" onclick="hacerLogout()">Cerrar sesión</button>
+      `;
+      abrirModal(html);
+    });
+  }
+  
+  // Verificar sesión
+  verificarSesion().then(ok => {
+    if (ok) iniciarApp();
+  });
+});
+
+// Prevenir zoom doble-tap iOS
+let lastTouch = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouch <= 300) e.preventDefault();
+  lastTouch = now;
+}, { passive: false });
+
+// Polyfill roundRect
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+</script>

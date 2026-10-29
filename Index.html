@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#6f4e37">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Café FLOWY - Pedidos</title>
+<?!= include('Styles'); ?>
+</head>
+<body>
+
+<!-- ═══════════ PANTALLA LOGIN ═══════════ -->
+<div id="pantalla-login" class="pantalla-login">
+  <div class="login-card">
+    <div class="login-logo">☕</div>
+    <h1 id="login-titulo">Café FLOWY</h1>
+    <p class="login-sub">Ingresa tu PIN para continuar</p>
+    
+    <div class="pin-display" id="pin-display">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    
+    <div class="pin-pad">
+      <button class="pin-btn" data-num="1">1</button>
+      <button class="pin-btn" data-num="2">2</button>
+      <button class="pin-btn" data-num="3">3</button>
+      <button class="pin-btn" data-num="4">4</button>
+      <button class="pin-btn" data-num="5">5</button>
+      <button class="pin-btn" data-num="6">6</button>
+      <button class="pin-btn" data-num="7">7</button>
+      <button class="pin-btn" data-num="8">8</button>
+      <button class="pin-btn" data-num="9">9</button>
+      <button class="pin-btn pin-btn-fn" data-fn="clear">C</button>
+      <button class="pin-btn" data-num="0">0</button>
+      <button class="pin-btn pin-btn-fn" data-fn="del">⌫</button>
+    </div>
+    
+    <button class="btn btn-primary login-btn" id="btn-login" disabled>Ingresar</button>
+    <p class="login-hint">PIN por defecto: 1234</p>
+  </div>
+</div>
+
+<!-- ═══════════ APP PRINCIPAL ═══════════ -->
+<div id="app" class="app oculto">
+  
+  <header class="app-header">
+    <div class="header-top">
+      <div>
+        <h1>☕ <span id="nombre-negocio">Café FLOWY</span></h1>
+        <p id="subtitulo">
+          <span class="online-dot" id="online-dot"></span>
+          <span id="subtitulo-texto">Panel de control</span>
+        </p>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" id="btn-usuario" title="Usuario">
+          <span id="user-inicial">?</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- ═════ VISTA: VENTAS ═════ -->
+    <section id="vista-ventas" class="vista activa">
+      <div class="stats three">
+        <div class="stat">
+          <div class="valor" id="stat-total">Bs 0</div>
+          <div class="label">Ventas</div>
+        </div>
+        <div class="stat">
+          <div class="valor" id="stat-cant">0</div>
+          <div class="label">Pedidos</div>
+        </div>
+        <div class="stat">
+          <div class="valor" id="stat-prom">Bs 0</div>
+          <div class="label">Promedio</div>
+        </div>
+      </div>
+
+      <div class="search-bar">
+        <input type="search" id="buscar-prod" placeholder="Buscar presentación..." autocomplete="off">
+      </div>
+
+      <div class="cats" id="cats"></div>
+
+      <div class="grid-productos" id="grid-productos"></div>
+    </section>
+
+    <!-- ═════ VISTA: CAJA ═════ -->
+    <section id="vista-caja" class="vista">
+      <div class="card">
+        <h2>⏰ Turno actual</h2>
+        <div id="turno-info"></div>
+        <button class="btn btn-success" id="btn-abrir-turno" onclick="abrirTurnoUI()">🟢 Abrir turno</button>
+        <button class="btn btn-danger oculto" id="btn-cerrar-turno" onclick="cerrarTurnoUI()">🔴 Cerrar turno</button>
+      </div>
+
+      <div class="card">
+        <h2>➕ Movimiento de caja</h2>
+        <div class="tipo-toggle">
+          <button class="btn btn-secondary activo" id="btn-tipo-ing" onclick="setTipoMov('Ingreso')">↑ Ingreso</button>
+          <button class="btn btn-secondary" id="btn-tipo-egr" onclick="setTipoMov('Egreso')">↓ Egreso</button>
+        </div>
+        <input id="mov-tipo" type="hidden" value="Ingreso">
+        <label>Concepto</label>
+        <input id="mov-concepto" type="text" placeholder="Ej: Compra de leche">
+        <label>Monto (Bs)</label>
+        <input id="mov-monto" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+        <label>Método</label>
+        <select id="mov-metodo">
+          <option>Efectivo</option>
+          <option>Tarjeta</option>
+        <option>QR</option>
+          <option>Transferencia</option>
+        </select>
+        <label>Notas (opcional)</label>
+        <input id="mov-notas" type="text">
+        <button class="btn btn-primary" onclick="guardarMovimiento()">Guardar movimiento</button>
+      </div>
+
+      <div class="card">
+        <h2>🧾 Arqueo de caja</h2>
+        <label>Fecha inicio</label>
+        <input id="arq-inicio" type="date">
+        <label>Fecha fin</label>
+        <input id="arq-fin" type="date">
+        <label>Monto apertura (Bs)</label>
+        <input id="arq-apertura" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+        <label>Monto contado (Bs)</label>
+        <input id="arq-contado" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+        <button class="btn btn-primary" onclick="hacerArqueo()">Realizar arqueo</button>
+      </div>
+
+      <div class="card">
+        <h2>📊 Últimos movimientos</h2>
+        <div id="lista-movimientos"></div>
+      </div>
+    </section>
+
+    <!-- ═════ VISTA: PRODUCTOS ═════ -->
+    <section id="vista-productos" class="vista">
+      <div class="card">
+        <h2 id="titulo-form-prod">➕ Agregar producto</h2>
+        <input type="hidden" id="prod-id">
+        <label>Nombre</label>
+        <input id="prod-nombre" type="text" placeholder="Ej: Café Molido Tradicional 250 gr">
+        <label>Categoría / Línea</label>
+        <input id="prod-categoria" type="text" placeholder="Ej: Tradicional" list="lista-cats">
+        <datalist id="lista-cats"></datalist>
+        <label>Presentación (gramos)</label>
+        <input id="prod-gramos" type="number" inputmode="numeric" placeholder="250, 500, 1000...">
+        <div class="fila-2">
+          <div>
+            <label>Precio (Bs)</label>
+            <input id="prod-precio" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label>Costo (Bs)</label>
+            <input id="prod-costo" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="fila-2">
+          <div>
+            <label>Stock en bolsas (0 = ilimitado)</label>
+            <input id="prod-stock" type="number" inputmode="numeric" value="0">
+          </div>
+          <div>
+            <label>Stock mínimo</label>
+            <input id="prod-stockmin" type="number" inputmode="numeric" value="5">
+          </div>
+        </div>
+        <div class="fila-2">
+          <div>
+            <label>Orden</label>
+            <input id="prod-orden" type="number" inputmode="numeric" value="999">
+          </div>
+          <div>
+            <label>Disponible</label>
+            <select id="prod-disponible">
+              <option value="true">Sí</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="guardarProducto()" id="btn-guardar-prod">Guardar producto</button>
+        <button class="btn btn-secondary oculto" onclick="cancelarEdicionProd()" id="btn-cancelar-prod" style="margin-top:8px;">Cancelar</button>
+      </div>
+
+      <div class="card">
+        <h2>📋 Catálogo <span id="cont-prods" style="font-weight:400;opacity:.7;"></span></h2>
+        <div id="lista-productos"></div>
+      </div>
+    </section>
+
+    <!-- ═════ VISTA: PEDIDOS ═════ -->
+    <section id="vista-historial" class="vista">
+      <div class="card">
+        <h2>📦 Pedidos y entregas</h2>
+        <select id="filtro-pedidos" onchange="cargarHistorial()">
+          <option value="Activos">Por entregar (pendientes / en camino)</option>
+          <option value="Entregado">Entregados</option>
+          <option value="Cancelado">Cancelados</option>
+          <option value="Todos">Todos</option>
+        </select>
+        <div id="historial-ventas"></div>
+      </div>
+    </section>
+
+    <!-- ═════ VISTA: DASHBOARD ═════ -->
+    <section id="vista-dashboard" class="vista">
+      <div class="card">
+        <h2>📊 Resumen del día</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="valor" id="dash-total">Bs 0</div>
+            <div class="label">Ventas</div>
+          </div>
+          <div class="stat">
+            <div class="valor" id="dash-tickets">0</div>
+            <div class="label">Tickets</div>
+          </div>
+          <div class="stat">
+            <div class="valor" id="dash-efectivo">Bs 0</div>
+            <div class="label">Efectivo</div>
+          </div>
+          <div class="stat">
+            <div class="valor" id="dash-qr">Bs 0</div>
+            <div class="label">QR/Tarjeta</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📈 Ventas últimos 7 días</h2>
+        <canvas id="chart-semana" height="180"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>🏆 Top productos (7 días)</h2>
+        <div id="top-productos"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- CARRITO FLOTANTE -->
+  <div class="carrito-bar" id="carrito-bar" onclick="abrirCarrito()">
+    <div>
+      <div class="info"><span id="carrito-count">0</span> items</div>
+      <div class="total" id="carrito-total">Bs 0.00</div>
+    </div>
+    <div style="font-size:24px;">🛒 →</div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="app-nav">
+    <button class="activo" data-vista="ventas">
+      <span class="ico">🛒</span><span>Ventas</span>
+    </button>
+    <button data-vista="caja">
+      <span class="ico">💰</span><span>Caja</span>
+    </button>
+    <button data-vista="productos">
+      <span class="ico">📋</span><span>Productos</span>
+    </button>
+    <button data-vista="historial">
+      <span class="ico">📦</span><span>Pedidos</span>
+    </button>
+    <button data-vista="dashboard">
+      <span class="ico">📊</span><span>Dashboard</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-contenido"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- LOADER -->
+<div class="loader" id="loader"><div class="spinner"></div></div>
+
+<?!= include('App'); ?>
+
+</body>
+</html>
