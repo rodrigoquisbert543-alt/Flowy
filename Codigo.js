@@ -208,3 +208,4 @@ function crearTriggers() {
   ScriptApp.newTrigger('enviarReporteDiario').timeBased().atHour(22).everyDays(1).create();
   return { ok: true, msg: 'Triggers creados' };
 }
+
